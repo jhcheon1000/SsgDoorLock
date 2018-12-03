@@ -26,12 +26,13 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.ToggleButton;
 
+
 public class SensorTest extends AppCompatActivity implements SensorEventListener{
     private SensorManager mSensorManager = null;
 
     public double[] mag_val, acc_val;
     public int mag_cnt;
-    public int mag_sample_cnt = 100;
+    public int mag_sample_cnt = 20;
     public int move_cnt, stop_cnt, acc_cnt;
     public int acc_sample_cnt = 100;
     private boolean move_flag;
@@ -45,7 +46,13 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 
     private double home_longitude; //경도
     private double home_latitude;  //위도
-    private boolean home_flag;
+
+    private double lat208 = 37.5035436;
+    private double lon208 = 126.95783929999999;
+    private double latCen = 37.505088;
+    private double lonCen = 126.9571012;
+
+    private Location location208;
 
     private Kalman mKalmanAccX, mKalmanAccY, mKalmanAccZ;
 
@@ -90,6 +97,10 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
         // LocationManager 객체를 얻어온다
         final LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
+        location208 = new Location("208");
+        location208.setLatitude(lat208);
+        location208.setLongitude(lon208);
+
         tb.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -113,8 +124,6 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
                 }
             }
         });
-
-        home_flag = false;
 
 //        ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -144,7 +153,7 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 
         mSensorManager.registerListener(this,
                 mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD),
-                SensorManager.SENSOR_DELAY_FASTEST);
+                SensorManager.SENSOR_DELAY_UI);
 
         mSensorManager.registerListener(this,
                 mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION),
@@ -159,28 +168,57 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
         switch (sensorType) {
             case Sensor.TYPE_MAGNETIC_FIELD:
                 if (mag_cnt == mag_sample_cnt) {
-                    mag_cnt = 0;
-                    double mag_avg = 0;
-                    double mag_var = 0;
-                    for (int i = 0; i < mag_sample_cnt; i++) {
-                        mag_avg += mag_val[i];
+                    for (int i = 0; i < mag_sample_cnt-1; i++) {
+                        mag_val[i] = mag_val[i+1];
                     }
-                    mag_avg = mag_avg/mag_sample_cnt;
-
-                    for (int i = 0; i < mag_sample_cnt; i++) {
-                        double temp = mag_val[i] - mag_avg;
-                        mag_var += Math.pow(temp, 2);
-                    }
-                    mag_var = mag_var/(mag_sample_cnt - 1);
-
-                    String mag_var_result = String.format("%.1f", mag_var);
-
-                    mag.setText(mag_var_result);
-                } else {
-                    mag_val[mag_cnt++] = Math.sqrt(values[0]*values[0] + values[1]*values[1] + values[2]*values[2]);
-                    String mag_val_result = String.format("%.1f", mag_val[mag_cnt-1]);
-                    acc.setText(mag_val_result);
+                    mag_val[mag_sample_cnt-1] = Math.sqrt(values[0]*values[0] + values[1]*values[1] + values[2]*values[2]);
                 }
+                else {
+                    mag_val[mag_cnt++] = Math.sqrt(values[0]*values[0] + values[1]*values[1] + values[2]*values[2]);
+                }
+
+                double mag_avg = 0;
+                double mag_var = 0;
+                int d = 0;
+                if (mag_cnt == 1) {
+                    d = mag_cnt;
+                }
+                else d = mag_cnt;
+                for (int i = 0; i < mag_cnt; i++) {
+                    mag_avg += mag_val[i];
+                }
+
+                mag_avg /= d;
+
+                for (int i = 0; i < mag_cnt; i++) {
+                    mag_var = (mag_val[i] - mag_avg) * (mag_val[i] - mag_avg);
+                }
+                mag_var /= d;
+                String mag_var_result = String.format("%.3f", mag_var);
+                mag.setText(mag_var_result);
+//                if (mag_cnt == mag_sample_cnt) {
+//                    mag_cnt = 0;
+//                    double mag_avg = 0;
+//                    double mag_var = 0;
+//                    for (int i = 0; i < mag_sample_cnt; i++) {
+//                        mag_avg += mag_val[i];
+//                    }
+//                    mag_avg = mag_avg/mag_sample_cnt;
+//
+//                    for (int i = 0; i < mag_sample_cnt; i++) {
+//                        double temp = mag_val[i] - mag_avg;
+//                        mag_var += Math.pow(temp, 2);
+//                    }
+//                    mag_var = mag_var/mag_sample_cnt;
+//
+//                    String mag_var_result = String.format("%.3f", mag_var);
+//
+//                    mag.setText(mag_var_result);
+//                } else {
+//                    mag_val[mag_cnt++] = Math.sqrt(values[0]*values[0] + values[1]*values[1] + values[2]*values[2]);
+//                    String mag_val_result = String.format("%.1f", mag_val[mag_cnt-1]);
+//                    acc.setText(mag_val_result);
+//                }
                 break;
             case Sensor.TYPE_LINEAR_ACCELERATION:
                 if (acc_cnt == acc_sample_cnt) {
@@ -210,7 +248,7 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 //                    acc.setText(acc_result+" m/s2");
 //                    result.setText(vec_result);
 
-                    if (accVal > 0.4) move_cnt++;
+                    if (accVal > 0.5) move_cnt++;
                     else stop_cnt++;
                     acc_cnt++;
                 }
@@ -234,16 +272,16 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
             double altitude = location.getAltitude();   //고도
             float accuracy = location.getAccuracy();    //정확도
             String provider = location.getProvider();   //위치제공자
-            if (home_flag == false) {
-                home_longitude = longitude;
-                home_latitude = latitude;
-                home_flag = true;
-            }
+            Location temp = new Location("temp");
+            temp.setLongitude(longitude);
+            temp.setLatitude(latitude);
+            float distance = location208.distanceTo(temp);
             //Gps 위치제공자에 의한 위치변화. 오차범위가 좁다.
             //Network 위치제공자에 의한 위치변화
             //Network 위치는 Gps에 비해 정확도가 많이 떨어진다.
             tv.setText("위치정보 : " + provider + "\n위도 : " + longitude + "\n경도 : " + latitude
-                    + "\n고도 : " + altitude + "\n정확도 : "  + accuracy);
+                    + "\n고도 : " + altitude + "\n정확도 : "  + accuracy + "\n208관과의 거리 : " + distance);
+            Log.d(".SensorTest", "208관과의 거리 : " + String.valueOf(distance));
         }
         public void onProviderDisabled(String provider) {
             // Disabled시
