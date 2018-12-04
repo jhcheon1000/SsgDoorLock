@@ -12,9 +12,11 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.GnssStatus;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
@@ -24,10 +26,11 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.widget.ToggleButton;
 
 
-public class SensorTest extends AppCompatActivity implements SensorEventListener{
+public class SensorTest extends AppCompatActivity implements SensorEventListener {
     private SensorManager mSensorManager = null;
 
     public double[] mag_val, acc_val;
@@ -53,11 +56,17 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
     private double lonCen = 126.9571012;
 
     private Location location208;
+    LocationManager lm;
+    GnssStatus.Callback mGnssStatusCallback;
+    private int satCnt;
 
     private Kalman mKalmanAccX, mKalmanAccY, mKalmanAccZ;
 
     private BluetoothAdapter mBluetoothAdapter;
     Button dis;
+
+    ToggleButton thrTest;
+    AccelerometerThread accThr;
 
     private final String[] permissions = {
             Manifest.permission.BLUETOOTH,
@@ -92,10 +101,10 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
         tv = (TextView) findViewById(R.id.textView2);
         tv.setText("위치정보 미수신중");
 
-        tb = (ToggleButton)findViewById(R.id.toggle1);
+        tb = (ToggleButton) findViewById(R.id.toggle1);
 
         // LocationManager 객체를 얻어온다
-        final LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         location208 = new Location("208");
         location208.setLatitude(lat208);
@@ -104,8 +113,8 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
         tb.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                try{
-                    if(tb.isChecked()){
+                try {
+                    if (tb.isChecked()) {
                         tv.setText("수신중..");
                         // GPS 제공자의 정보가 바뀌면 콜백하도록 리스너 등록하기~!!!
                         lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, // 등록할 위치제공자
@@ -116,20 +125,43 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
                                 100, // 통지사이의 최소 시간간격 (miliSecond)
                                 1, // 통지사이의 최소 변경거리 (m)
                                 mLocationListener);
-                    }else{
+                    } else {
                         tv.setText("위치정보 미수신중");
                         lm.removeUpdates(mLocationListener);  //  미수신할때는 반드시 자원해체를 해주어야 한다.
                     }
-                }catch(SecurityException ex){
+                } catch (SecurityException ex) {
                 }
             }
         });
+
+
+        satCnt = -1;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            mGnssStatusCallback = new GnssStatus.Callback() {
+                @Override
+                public void onSatelliteStatusChanged(GnssStatus status) {
+                    super.onSatelliteStatusChanged(status);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        if(satCnt == status.getSatelliteCount()) {
+
+                        }
+                        else {
+                            Log.d("위성", "위성 개수 : " + String.valueOf(status.getSatelliteCount()));
+                            Toast.makeText(getApplicationContext(), "위성 개수 : " + String.valueOf(status.getSatelliteCount()), Toast.LENGTH_SHORT).show();
+                            satCnt = status.getSatelliteCount();
+                        }
+
+
+                    }
+                }
+            };
+        }
 
 //        ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         registerReceiver(receiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
 
-        if(!mBluetoothAdapter.isEnabled()){
+        if (!mBluetoothAdapter.isEnabled()) {
             mBluetoothAdapter.enable(); //강제 활성화
         }
 
@@ -139,6 +171,21 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
             public void onClick(View view) {
                 mBluetoothAdapter.startDiscovery();
                 Log.d("Sibal", "start Discovery");
+            }
+        });
+
+        thrTest = (ToggleButton) findViewById(R.id.toggle2);
+        thrTest.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (thrTest.isChecked()) {
+                    accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
+                    accThr.start();
+                }
+                else {
+                    accThr.finish();
+                    accThr = null;
+                }
             }
         });
 
@@ -155,9 +202,19 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
                 mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD),
                 SensorManager.SENSOR_DELAY_UI);
 
-        mSensorManager.registerListener(this,
-                mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION),
-                SensorManager.SENSOR_DELAY_FASTEST);
+//        mSensorManager.registerListener(this,
+//                mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION),
+//                SensorManager.SENSOR_DELAY_FASTEST);
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            if (lm != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    lm.registerGnssStatusCallback(mGnssStatusCallback);
+                }
+            }
+        }
+
+
     }
 
     @Override
@@ -196,27 +253,27 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
                 mag_var /= d;
                 String mag_var_result = String.format("%.3f", mag_var);
                 mag.setText(mag_var_result);
-//                if (mag_cnt == mag_sample_cnt) {
-//                    mag_cnt = 0;
+//                if (magCnt == magSampleCnt) {
+//                    magCnt = 0;
 //                    double mag_avg = 0;
 //                    double mag_var = 0;
-//                    for (int i = 0; i < mag_sample_cnt; i++) {
-//                        mag_avg += mag_val[i];
+//                    for (int i = 0; i < magSampleCnt; i++) {
+//                        mag_avg += magVal[i];
 //                    }
-//                    mag_avg = mag_avg/mag_sample_cnt;
+//                    mag_avg = mag_avg/magSampleCnt;
 //
-//                    for (int i = 0; i < mag_sample_cnt; i++) {
-//                        double temp = mag_val[i] - mag_avg;
+//                    for (int i = 0; i < magSampleCnt; i++) {
+//                        double temp = magVal[i] - mag_avg;
 //                        mag_var += Math.pow(temp, 2);
 //                    }
-//                    mag_var = mag_var/mag_sample_cnt;
+//                    mag_var = mag_var/magSampleCnt;
 //
 //                    String mag_var_result = String.format("%.3f", mag_var);
 //
 //                    mag.setText(mag_var_result);
 //                } else {
-//                    mag_val[mag_cnt++] = Math.sqrt(values[0]*values[0] + values[1]*values[1] + values[2]*values[2]);
-//                    String mag_val_result = String.format("%.1f", mag_val[mag_cnt-1]);
+//                    magVal[magCnt++] = Math.sqrt(values[0]*values[0] + values[1]*values[1] + values[2]*values[2]);
+//                    String mag_val_result = String.format("%.1f", magVal[magCnt-1]);
 //                    acc.setText(mag_val_result);
 //                }
                 break;
@@ -337,6 +394,15 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
         }
 
         return rtn;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterReceiver(receiver);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            lm.unregisterGnssStatusCallback(mGnssStatusCallback);
+        }
     }
 }
 

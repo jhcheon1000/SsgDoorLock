@@ -51,5 +51,12 @@
         android:layout_marginTop="10dp"
         android:id="@+id/bthTestBut"/>
 
+    <ToggleButton
+        android:id="@+id/toggle2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textOff="Acc Thread 시작"
+        android:textOn="Acc Thread 종료" />
+
 
 </LinearLayout>

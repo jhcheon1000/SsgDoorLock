@@ -8,6 +8,10 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.hardware.SensorManager;
+import android.location.GnssStatus;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.annotation.Nullable;
@@ -28,6 +32,31 @@ public class DoorLockService extends Service {
     private final String TAG = "DoorLockService";
     private Boolean isInit;
     private Boolean isPostDelay;
+    //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    // by cheon
+    private int isHomeArea;
+    private int isMovement;
+    private int isIndoor;
+
+    //for indoor process
+    private int isFront;
+    private int isStopFront;
+
+    //for managing sesnor (accelerometer, magnetism)
+    private SensorManager mSensorManager = null;
+
+    //for managing gps
+    private Location locationHomeArea;
+    LocationManager mLocationManager = null;
+    GnssStatus.Callback mGnssStatusCallback;
+    private int satCnt;
+
+
+    private static final int STATE_TRUE = 1;
+    private static final int STATE_FALSE = 2;
+    //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 
     // Member fields
     private static final UUID uuidSPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
@@ -74,6 +103,22 @@ public class DoorLockService extends Service {
         mState = STATE_NONE;
         isInit = pref.getBoolean("isInit", FALSE);
         isPostDelay = FALSE;
+
+        //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // by cheon
+        double lat = Double.valueOf(pref.getString("homeLatitude", "-1"));
+        double lon = Double.valueOf(pref.getString("homeLongitude", "-1"));
+        locationHomeArea = new Location("homeArea");
+        locationHomeArea.setLatitude(lat);
+        locationHomeArea.setLongitude(lon);
+
+        satCnt = -1;
+        isHomeArea = STATE_NONE;
+        isMovement = STATE_NONE;
+        isIndoor = STATE_NONE;
+        isFront = STATE_NONE;
+        isStopFront = STATE_NONE;
+        //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 //        ForeGroundService.startForeground(this);
         Intent localIntent = new Intent(this, ForeGroundService.class);
@@ -330,7 +375,7 @@ public class DoorLockService extends Service {
     }
     private void connectionLost() {
         setState(STATE_LISTEN);
-
+        Log.d(TAG, "connectionLost() start");
         if(!isPostDelay){
             isPostDelay = TRUE;
             handler.postDelayed(new Runnable() {
@@ -340,6 +385,7 @@ public class DoorLockService extends Service {
                     String Address = pref.getString("Address",null);
 
                     if (Address != null) {
+                        Log.d(TAG, "connectionLost() handler try connect");
                         BluetoothDevice bdevice = mAdapter.getRemoteDevice(Address);
                         connect(bdevice);
                     }
