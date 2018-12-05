@@ -6,6 +6,7 @@ import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
@@ -50,6 +51,9 @@ public class DoorLockService extends Service {
     LocationManager mLocationManager = null;
     GnssStatus.Callback mGnssStatusCallback;
     private int satCnt;
+
+    //for capturing rssi
+    BroadcastReceiver mReceiver = null;
 
 
     private static final int STATE_TRUE = 1;
@@ -404,5 +408,13 @@ public class DoorLockService extends Service {
         editor.putBoolean("isInit", TRUE);
         editor.putString("Address", device.getAddress());
         editor.commit();
+    }
+
+    private void registerReceiver() {
+
+    }
+
+    private void unregisterReceiver() {
+
     }
 }

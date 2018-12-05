@@ -57,7 +57,7 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 
     private Location location208;
     LocationManager lm;
-    GnssStatus.Callback mGnssStatusCallback;
+//    GnssStatus.Callback mGnssStatusCallback;
     private int satCnt;
 
     private Kalman mKalmanAccX, mKalmanAccY, mKalmanAccZ;
@@ -67,6 +67,9 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 
     ToggleButton thrTest;
     AccelerometerThread accThr;
+    GeomagnetismThread magThr;
+    GpsThread gpsThr;
+    SatelliteCountThread satThr;
 
     private final String[] permissions = {
             Manifest.permission.BLUETOOTH,
@@ -110,52 +113,52 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
         location208.setLatitude(lat208);
         location208.setLongitude(lon208);
 
-        tb.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                try {
-                    if (tb.isChecked()) {
-                        tv.setText("수신중..");
-                        // GPS 제공자의 정보가 바뀌면 콜백하도록 리스너 등록하기~!!!
-                        lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, // 등록할 위치제공자
-                                100, // 통지사이의 최소 시간간격 (miliSecond)
-                                1, // 통지사이의 최소 변경거리 (m)
-                                mLocationListener);
-                        lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, // 등록할 위치제공자
-                                100, // 통지사이의 최소 시간간격 (miliSecond)
-                                1, // 통지사이의 최소 변경거리 (m)
-                                mLocationListener);
-                    } else {
-                        tv.setText("위치정보 미수신중");
-                        lm.removeUpdates(mLocationListener);  //  미수신할때는 반드시 자원해체를 해주어야 한다.
-                    }
-                } catch (SecurityException ex) {
-                }
-            }
-        });
+//        tb.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                try {
+//                    if (tb.isChecked()) {
+//                        tv.setText("수신중..");
+//                        // GPS 제공자의 정보가 바뀌면 콜백하도록 리스너 등록하기~!!!
+//                        lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, // 등록할 위치제공자
+//                                100, // 통지사이의 최소 시간간격 (miliSecond)
+//                                1, // 통지사이의 최소 변경거리 (m)
+//                                mLocationListener);
+//                        lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, // 등록할 위치제공자
+//                                100, // 통지사이의 최소 시간간격 (miliSecond)
+//                                1, // 통지사이의 최소 변경거리 (m)
+//                                mLocationListener);
+//                    } else {
+//                        tv.setText("위치정보 미수신중");
+//                        lm.removeUpdates(mLocationListener);  //  미수신할때는 반드시 자원해체를 해주어야 한다.
+//                    }
+//                } catch (SecurityException ex) {
+//                }
+//            }
+//        });
 
 
         satCnt = -1;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            mGnssStatusCallback = new GnssStatus.Callback() {
-                @Override
-                public void onSatelliteStatusChanged(GnssStatus status) {
-                    super.onSatelliteStatusChanged(status);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        if(satCnt == status.getSatelliteCount()) {
-
-                        }
-                        else {
-                            Log.d("위성", "위성 개수 : " + String.valueOf(status.getSatelliteCount()));
-                            Toast.makeText(getApplicationContext(), "위성 개수 : " + String.valueOf(status.getSatelliteCount()), Toast.LENGTH_SHORT).show();
-                            satCnt = status.getSatelliteCount();
-                        }
-
-
-                    }
-                }
-            };
-        }
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//            mGnssStatusCallback = new GnssStatus.Callback() {
+//                @Override
+//                public void onSatelliteStatusChanged(GnssStatus status) {
+//                    super.onSatelliteStatusChanged(status);
+//                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//                        if(satCnt == status.getSatelliteCount()) {
+//
+//                        }
+//                        else {
+//                            Log.d("위성", "위성 개수 : " + String.valueOf(status.getSatelliteCount()));
+//                            Toast.makeText(getApplicationContext(), "위성 개수 : " + String.valueOf(status.getSatelliteCount()), Toast.LENGTH_SHORT).show();
+//                            satCnt = status.getSatelliteCount();
+//                        }
+//
+//
+//                    }
+//                }
+//            };
+//        }
 
 //        ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -179,12 +182,20 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
             @Override
             public void onClick(View view) {
                 if (thrTest.isChecked()) {
-                    accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
-                    accThr.start();
+//                    accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
+//                    accThr.start();
+//                    gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), location208, SensorTest.this);
+//                    gpsThr.start();
+                    satThr = new SatelliteCountThread((LocationManager) getSystemService(LOCATION_SERVICE), SensorTest.this);
+                    satThr.start();
                 }
                 else {
-                    accThr.finish();
-                    accThr = null;
+//                    accThr.finish();
+//                    accThr = null;
+//                    gpsThr.finish();
+//                    gpsThr = null;
+                    satThr.finish();
+                    satThr = null;
                 }
             }
         });
@@ -206,13 +217,13 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 //                mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION),
 //                SensorManager.SENSOR_DELAY_FASTEST);
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            if (lm != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    lm.registerGnssStatusCallback(mGnssStatusCallback);
-                }
-            }
-        }
+//        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+//            if (lm != null) {
+//                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//                    lm.registerGnssStatusCallback(mGnssStatusCallback);
+//                }
+//            }
+//        }
 
 
     }
@@ -400,9 +411,9 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
     protected void onDestroy() {
         super.onDestroy();
         unregisterReceiver(receiver);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            lm.unregisterGnssStatusCallback(mGnssStatusCallback);
-        }
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+//            lm.unregisterGnssStatusCallback(mGnssStatusCallback);
+//        }
     }
 }
 
