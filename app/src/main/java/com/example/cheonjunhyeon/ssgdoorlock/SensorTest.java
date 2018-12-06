@@ -18,6 +18,9 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -71,6 +74,11 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
     GpsThread gpsThr;
     SatelliteCountThread satThr;
     GetRssiThread rssiThr;
+
+    private Handler mHandler = null;
+    private HandlerThread mHandlerThread = null;
+
+
 
     private final String[] permissions = {
             Manifest.permission.BLUETOOTH,
@@ -183,28 +191,28 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
             @Override
             public void onClick(View view) {
                 if (thrTest.isChecked()) {
-                    accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
-                    accThr.start();
-                    gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), location208, SensorTest.this);
-                    gpsThr.start();
-                    satThr = new SatelliteCountThread((LocationManager) getSystemService(LOCATION_SERVICE), SensorTest.this);
-                    satThr.start();
+//                    accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
+//                    accThr.start();
+//                    gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), location208, SensorTest.this);
+//                    gpsThr.start();
+//                    satThr = new SatelliteCountThread((LocationManager) getSystemService(LOCATION_SERVICE), SensorTest.this);
+//                    satThr.start();
                     rssiThr = new GetRssiThread(mBluetoothAdapter, SensorTest.this);
                     rssiThr.start();
-                    magThr = new GeomagnetismThread((SensorManager) getSystemService(SENSOR_SERVICE));
-                    magThr.start();
+//                    magThr = new GeomagnetismThread((SensorManager) getSystemService(SENSOR_SERVICE));
+//                    magThr.start();
                 }
                 else {
-                    accThr.finish();
-                    accThr = null;
-                    gpsThr.finish();
-                    gpsThr = null;
-                    satThr.finish();
-                    satThr = null;
+//                    accThr.finish();
+//                    accThr = null;
+//                    gpsThr.finish();
+//                    gpsThr = null;
+//                    satThr.finish();
+//                    satThr = null;
                     rssiThr.finish();
                     rssiThr = null;
-                    magThr.finish();
-                    magThr = null;
+//                    magThr.finish();
+//                    magThr = null;
                 }
             }
         });
@@ -233,7 +241,13 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 //                }
 //            }
 //        }
-
+        startHandlerThread();
+//        mHandler.postDelayed(new Runnable() {
+//            @Override
+//            public void run() {
+//                mHandler.sendEmptyMessage(1);
+//            }
+//        }, 1000);
 
     }
 
@@ -423,6 +437,29 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 //            lm.unregisterGnssStatusCallback(mGnssStatusCallback);
 //        }
+    }
+
+    public void startHandlerThread() {
+        mHandlerThread = new HandlerThread("HandlerThread");
+        mHandlerThread.start();
+        mHandler = new Handler(mHandlerThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                super.handleMessage(msg);
+                switch(msg.what) {
+                    case 1:
+                        Log.d("hing", "msg 1");
+                        mHandler.sendEmptyMessage(2);
+                        break;
+                    case 2:
+                        Log.d("hing", "msg 2");
+                        mHandler.sendEmptyMessage(1);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        };
     }
 }
 

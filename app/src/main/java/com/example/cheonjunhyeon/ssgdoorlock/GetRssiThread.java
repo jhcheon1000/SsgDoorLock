@@ -20,14 +20,18 @@ public class GetRssiThread extends Thread {
     private Context rcvContext;
 
     private int rssi;
+    private boolean isUpdate;
+
+    private static final int STATE_TRUE = 1;
+    private static final int STATE_FALSE = 2;
 
     public GetRssiThread(BluetoothAdapter bleApt, Context context) {
         mAdapter = bleApt;
         rcvContext = context;
         itf = new IntentFilter();
-        itf.addAction(BluetoothDevice.ACTION_FOUND);
 
-        rssi = 0;
+        rssi = -100;
+        isUpdate = false;
     }
 
     private void registerReceiver() {
@@ -54,37 +58,35 @@ public class GetRssiThread extends Thread {
 //                }
 
                 if(BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
-                    Log.d("siba", "DISCOVERY_FINISHED");
                     try{
                         Thread.sleep(10);
                     } catch (InterruptedException e) {
                             e.printStackTrace();
                     }
+//                    Log.d("logic", "startDiscovery");
                     mAdapter.startDiscovery();
                     return;
                 }
                 else if(BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
-                    Log.d("siba", "DISCOVERY_STARTED");
-
                     rssiHandler.postDelayed(new Runnable() {
                         @Override
                         public void run() {
                             mAdapter.cancelDiscovery();
+//                            Log.d("logic", "cancelDiscovery");
                         }
-                    }, 1000);
+                    }, 3000);
                 }
 
                 if(BluetoothDevice.ACTION_FOUND.equals(action)) {
                     if (name == null) {
 //                        rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE);
-//                        Log.d("siba", "null rssi : " + String.valueOf(rssi));
+//                        Log.d("logic", "null rssi : " + String.valueOf(rssi));
                         return;
                     }
-                    else if (name.equals("G7 ThinQ")) {
+                    else if (name.equals("nsl")) {
                         rssi = intent.getShortExtra(BluetoothDevice.EXTRA_RSSI, Short.MIN_VALUE);
-                        Log.d("jaebal", "GetRssiThread");
-                        Log.d("siba", name + " rssi : " + String.valueOf(rssi));
-                        Toast.makeText(rcvContext, "nsl rssi : " + String.valueOf(rssi), Toast.LENGTH_SHORT).show();
+                        setFlag(true);
+                        Log.d("logic", "flag true rssi " + String.valueOf(rssi));
 //                        mAdapter.cancelDiscovery();
 //                        try{
 //                            Thread.sleep(10);
@@ -93,7 +95,7 @@ public class GetRssiThread extends Thread {
 //                        }
                     }
                     else {
-//                        Log.d("siba", "siba " + name);
+//                        Log.d("logic", "rssi " + name);
                     }
                 }
             }
@@ -111,7 +113,9 @@ public class GetRssiThread extends Thread {
     }
 
     public void run() {
-        Looper.prepare();
+        if (Looper.myLooper() == null) {
+            Looper.prepare();
+        }
         rssiHandler = new Handler();
         registerReceiver();
         mAdapter.startDiscovery();
@@ -121,14 +125,28 @@ public class GetRssiThread extends Thread {
     public void finish() {
         if(rssiHandler != null) {
             rssiHandler.getLooper().quit();
+
         }
         if(mReceiver != null) {
             unregisterReceiver();
         }
     }
 
-    public int getRSSI() {
-        return rssi;
+    public int getStatus() {
+        if (rssi > -70) return STATE_TRUE;
+        else return STATE_FALSE;
+    }
+
+    public boolean isUpdate() {
+        return isUpdate;
+    }
+
+    public synchronized void setFlag(boolean bool) {
+        isUpdate = bool;
+    }
+
+    public void setInitRSSI(int rssi) {
+        this.rssi = rssi;
     }
 
 

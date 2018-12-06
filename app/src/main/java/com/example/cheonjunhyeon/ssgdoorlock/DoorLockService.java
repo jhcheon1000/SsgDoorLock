@@ -17,6 +17,7 @@ import android.location.Location;
 import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Message;
 import android.support.annotation.Nullable;
@@ -53,9 +54,21 @@ public class DoorLockService extends Service {
     private static final int STATE_TRUE = 1;
     private static final int STATE_FALSE = 2;
 
+    private Handler ssgHandler = null;
+    private HandlerThread ssgHandlerThread = null;
 
+    private AccelerometerThread accThr;
+    private GeomagnetismThread magThr;
+    private GetRssiThread rssiThr;
+    private SatelliteCountThread satThr;
+    private GpsThread gpsThr;
 
-    private LogicTask SsgLogicTask;
+    private BluetoothDevice bdevice;
+    private int connectionCnt;
+    private boolean isConnected;
+    private boolean isConnectedError;
+    private boolean isConnect;
+    private boolean isConnectError;
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
     // Member fields
@@ -78,6 +91,8 @@ public class DoorLockService extends Service {
     public static final int METHODS_OPEN = 2;
     public static final int METHODS_CLOSE = 3;
 
+    private Context tc;
+
 
     @Nullable
     @Override
@@ -90,15 +105,14 @@ public class DoorLockService extends Service {
     public void onDestroy() {
         Log.d(TAG,"onDestroy()");
         super.onDestroy();
-        SsgLogicTask.cancel(true);
-        SsgLogicTask = null;
+        ssgHandlerThread.quit();
     }
 
     @Override
     public void onCreate() {
         Log.d(TAG,"onCreate()");
         super.onCreate();
-
+        tc = DoorLockService.this;
         handler = new Handler();
         pref = getSharedPreferences("pref", MODE_PRIVATE);
         mAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -108,6 +122,10 @@ public class DoorLockService extends Service {
 
         //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         // by cheon
+        isConnected = false;
+        isConnectedError = false;
+        isConnect = false;
+        isConnectError = false;
 
         double lat = Double.valueOf(pref.getString("homeLatitude", "-1"));
         double lon = Double.valueOf(pref.getString("homeLongitude", "-1"));
@@ -120,22 +138,21 @@ public class DoorLockService extends Service {
         isIndoor = STATE_NONE;
         isFront = STATE_NONE;
         isStopFront = STATE_NONE;
+
         //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-//        ForeGroundService.startForeground(this);
+        ForeGroundService.startForeground(this);
         Intent localIntent = new Intent(this, ForeGroundService.class);
         startService(localIntent);
 
-        SsgLogicTask = new LogicTask();
-        SsgLogicTask.execute();
+        startHandlerThread();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG,"onStartCommand()");
-
         int methods = intent.getIntExtra("methods", 0);
-        BluetoothDevice bdevice;
+//        BluetoothDevice bdevice;
 
         switch (methods) {
             case METHODS_RELOAD:
@@ -145,15 +162,22 @@ public class DoorLockService extends Service {
                 if (isInit && mState != STATE_CONNECTED && Address != null) {
                     Toast.makeText(this, "reload", Toast.LENGTH_SHORT).show();
                     bdevice = mAdapter.getRemoteDevice(Address);
-                    connect(bdevice);
+                    //connect(bdevice);
                 }
                 break;
             case METHODS_INIT:
                 Log.d(TAG, "METHODS_INIT");
 
-                start();
                 bdevice = intent.getParcelableExtra("bdevice");
-                connect(bdevice);
+                ssgHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        ssgHandler.sendEmptyMessage(1);
+                    }
+                });
+                //start();
+                bdevice = intent.getParcelableExtra("bdevice");
+                //connect(bdevice);
                 break;
 
             case METHODS_OPEN:
@@ -229,7 +253,7 @@ public class DoorLockService extends Service {
                 DoorLockService.this.start();
                 return;
             }
-
+            isConnect = true;
             // ConnectThread 클래스를 reset한다.
             synchronized (DoorLockService.this) {
                 mConnectThread = null;
@@ -315,7 +339,7 @@ public class DoorLockService extends Service {
 
             mmInStream = tmpIn;
             mmOutStream = tmpOut;
-
+            isConnected = true;
             DoorLockService.this.setInit(device);
         }
 
@@ -412,44 +436,276 @@ public class DoorLockService extends Service {
         editor.commit();
     }
 
-    private class LogicTask extends AsyncTask<Void, Void, Boolean> {
-        private AccelerometerThread accThr;
-        private GeomagnetismThread magThr;
-        private GetRssiThread rssiThr;
-        private SatelliteCountThread satThr;
-        private GpsThread gpsThr;
-
-        private boolean isFirst;
-
-        public LogicTask() {
-            accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
-            magThr = new GeomagnetismThread((SensorManager) getSystemService(SENSOR_SERVICE));
-            rssiThr = new GetRssiThread(mAdapter, DoorLockService.this);
-            satThr = new SatelliteCountThread((LocationManager) getSystemService(LOCATION_SERVICE), DoorLockService.this);
-            gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), locationHomeArea, DoorLockService.this);
-
-            isFirst = false;
-        }
-
-        @Override
-        protected Boolean doInBackground(Void... voids) {
-            if (!isFirst) {
-                isFirst = true;
-                accThr.start();
-                magThr.start();
-                rssiThr.start();
-                satThr.start();
-                gpsThr.start();
-            }
-
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Boolean aBoolean) {
-            super.onPostExecute(aBoolean);
+    private synchronized void sendMsg(int what) {
+        if (ssgHandler != null) {
+            ssgHandler.sendEmptyMessage(what);
         }
     }
 
+    private void startHandlerThread() {
+        connectionCnt = 0;
+        accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
+        magThr = new GeomagnetismThread((SensorManager) getSystemService(SENSOR_SERVICE));
+        rssiThr = new GetRssiThread(mAdapter, DoorLockService.this);
+        satThr = new SatelliteCountThread((LocationManager) getSystemService(LOCATION_SERVICE), DoorLockService.this);
+        gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), locationHomeArea, DoorLockService.this);
 
+        accThr.start();
+        satThr.start();
+        gpsThr.start();
+        rssiThr.start();
+
+        ssgHandlerThread = new HandlerThread("SsgHandlerThread");
+        ssgHandlerThread.start();
+        ssgHandler = new Handler(ssgHandlerThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                super.handleMessage(msg);
+                switch(msg.what) {
+                    case 1:
+                        Log.d("logic", "check gps");
+                        if (gpsThr.getStatus() == STATE_TRUE) {
+                            Log.d("logic", "home area");
+
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(2);
+
+                        }
+                        else {
+                            Log.d("logic", "out area");
+                            try {
+                                Thread.sleep(5000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(1);
+                        }
+                        break;
+                    case 2:
+                        Log.d("logic", "check moving");
+                        if (accThr.isMovement() == STATE_TRUE) {
+                            Log.d("logic", "moving");
+
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(3);
+                        }
+                        else {
+                            Log.d("logic", "stop");
+                            try {
+                                Thread.sleep(5000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(1);
+                        }
+                        break;
+                    case 3:
+                        Log.d("logic", "check satCnt");
+                        if (satThr.getStatus() == STATE_TRUE) {
+                            Log.d("logic", "indoor");
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(5);
+                        }
+                        else {
+                            Log.d("logic", "outdoor");
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(4);
+                        }
+                        break;
+                    case 4:
+                        Log.d("logic", "outdoor process - check gps");
+                        if (gpsThr.getStatus() == STATE_TRUE) {
+                            Log.d("logic", "outdoor process - home area");
+                            try {
+                                Thread.sleep(3000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(5);
+                        }
+                        else {
+                            Log.d("logic", "outdoor process - out area");
+                            try {
+                                Thread.sleep(5000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(4);
+                        }
+                        break;
+                    case 5:
+                        Log.d("logic", "door process - check rssi");
+                        if(rssiThr.getStatus() == STATE_TRUE) {
+                            Log.d("logic", "door process - frontdoor");
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            rssiThr.setFlag(false);
+                            Log.d("logic", "flag false");
+                            sendMsg(6);
+                        }
+                        else {
+                            Log.d("logic", "door process - back");
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(2);
+                        }
+                    case 6:
+                        Log.d("logic", "door process - check stop&front");
+                        if(accThr.isMovement() == STATE_FALSE &&
+                                rssiThr.getStatus() == STATE_TRUE) {
+                            Log.d("logic", "door process - open door");
+                            rssiThr.setFlag(false);
+                            Log.d("logic", "flag false");
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(8);
+                        }
+                        else {
+                            Log.d("logic", "door process - moving or not front");
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(5);
+                        }
+                        break;
+                    case 7:
+                        Log.d("logic", "sibal?");
+                        if(rssiThr.isUpdate()) {
+                            Log.d("logic", "indoor after open door");
+                            rssiThr.setFlag(false);
+                            connectionCnt = 0;
+                            Log.d("logic", "flag false");
+                            try {
+                                Thread.sleep(2000);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(7);
+                        }
+                        else {
+                            if(connectionCnt == 3) {
+                                Log.d("logic", "sibalsibal?");
+                                for (int i = 0; i < 7; i++) {
+                                    ssgHandler.removeMessages(i+1);
+                                }
+                                rssiThr.setFlag(false);
+                                Log.d("logic", "flag false");
+                                connectionCnt = 0;
+                                rssiThr.setInitRSSI(-100);
+                                sendMsg(1);
+                            }
+                            else {
+                                connectionCnt++;
+                                try {
+                                    Thread.sleep(2000);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                                for (int i = 0; i < 7; i++) {
+                                    ssgHandler.removeMessages(i+1);
+                                }
+                                sendMsg(7);
+                            }
+                        }
+                        break;
+                    case 8:
+                        if (isConnect) connect(bdevice);
+
+                        if(isConnected) {
+                            mConnectedThread.write("1");
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(7);
+                        }
+                        else {
+                            try {
+                                Thread.sleep(100);
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            for (int i = 0; i < 7; i++) {
+                                ssgHandler.removeMessages(i+1);
+                            }
+                            sendMsg(8);
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        };
+    }
 }

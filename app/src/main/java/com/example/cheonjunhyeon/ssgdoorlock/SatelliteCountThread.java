@@ -24,6 +24,9 @@ public class SatelliteCountThread extends Thread implements LocationListener {
 
     private Context permissionContext;
 
+    private static final int STATE_TRUE = 1;
+    private static final int STATE_FALSE = 2;
+
     public SatelliteCountThread(LocationManager locationService, Context context) {
         mLocationManager = (LocationManager) locationService;
         permissionContext = context;
@@ -37,9 +40,8 @@ public class SatelliteCountThread extends Thread implements LocationListener {
                         if (satCnt == status.getSatelliteCount()) {
 
                         } else {
-                            Log.d("jaebal", "SateliteCountThread");
                             Log.d("siba", "위성 개수 : " + String.valueOf(status.getSatelliteCount()));
-                            Toast.makeText(permissionContext, "위성 개수 : " + String.valueOf(status.getSatelliteCount()), Toast.LENGTH_SHORT).show();
+//                            Toast.makeText(permissionContext, "위성 개수 : " + String.valueOf(status.getSatelliteCount()), Toast.LENGTH_SHORT).show();
                             satCnt = status.getSatelliteCount();
                         }
                     }
@@ -72,6 +74,15 @@ public class SatelliteCountThread extends Thread implements LocationListener {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             mLocationManager.removeUpdates(this);
             mLocationManager.unregisterGnssStatusCallback(mGnssStatusCallback);
+        }
+    }
+
+    public int getStatus() {
+        if (satCnt < 25 && satCnt >= 0) {
+            return STATE_TRUE;
+        }
+        else {
+            return STATE_FALSE;
         }
     }
 

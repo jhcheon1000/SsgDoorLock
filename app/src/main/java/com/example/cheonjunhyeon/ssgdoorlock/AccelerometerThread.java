@@ -20,6 +20,9 @@ public class AccelerometerThread extends Thread implements SensorEventListener {
     private boolean[] moveFlag;
     private int flagCnt;
 
+    private static final int STATE_TRUE = 1;
+    private static final int STATE_FALSE = 2;
+
     public AccelerometerThread(SensorManager sensorService) {
         mSensorManager = (SensorManager) sensorService;
 
@@ -56,12 +59,12 @@ public class AccelerometerThread extends Thread implements SensorEventListener {
         }
     }
 
-    public boolean isMovement() {
+    public int isMovement() {
         if (moveFlag[0] || moveFlag[1]) {
-            return true;
+            return STATE_TRUE;
         }
         else {
-            return false;
+            return STATE_FALSE;
         }
     }
 
@@ -94,7 +97,7 @@ public class AccelerometerThread extends Thread implements SensorEventListener {
 
                 double accVal = Math.sqrt(filteredX*filteredX + filteredY*filteredY + filteredZ*filteredZ);
 
-                if (accVal > 0.5) moveCnt++;
+                if (accVal > 0.9) moveCnt++;
                 else stopCnt++;
                 accCnt++;
             }

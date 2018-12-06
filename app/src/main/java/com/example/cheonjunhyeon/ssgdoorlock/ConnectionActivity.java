@@ -132,6 +132,7 @@ public class ConnectionActivity extends Activity {
                 switch (from)
                 {
                     case "activity":
+                        Log.d("haha", "connection activity");
                         intent = new Intent();
                         intent.putExtra("bdevice", device);
                         setResult(RESULT_OK, intent);

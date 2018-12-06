@@ -61,7 +61,6 @@ public class GeomagnetismThread extends Thread implements SensorEventListener {
         int sensorType = sensorEvent.sensor.getType();
 
         if (sensorType == Sensor.TYPE_MAGNETIC_FIELD) {
-            Log.d("jaebal", "GeomagnetismThread");
             if (magCnt == magSampleCnt) {
                 for (int i = 0; i < magSampleCnt -1; i++) {
                     magVal[i] = magVal[i+1];

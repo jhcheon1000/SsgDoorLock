@@ -32,7 +32,7 @@ public class GpsThread extends Thread implements LocationListener {
         mLocationManager = (LocationManager) locationService;
         this.homeArea = homeArea;
         permissionContext = context;
-        distance = -1;
+        distance = 10000;
     }
 
     public void run() {
@@ -41,11 +41,11 @@ public class GpsThread extends Thread implements LocationListener {
         if (ActivityCompat.checkSelfPermission(permissionContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
                 ActivityCompat.checkSelfPermission(permissionContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, // 등록할 위치제공자
-                    3000, // 통지사이의 최소 시간간격 (miliSecond)
+                    5000, // 통지사이의 최소 시간간격 (miliSecond)
                     0, // 통지사이의 최소 변경거리 (m)
                     this);
             mLocationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, // 등록할 위치제공자
-                    3000, // 통지사이의 최소 시간간격 (miliSecond)
+                    5000, // 통지사이의 최소 시간간격 (miliSecond)
                     0, // 통지사이의 최소 변경거리 (m)
                     this);
         }
@@ -60,7 +60,7 @@ public class GpsThread extends Thread implements LocationListener {
     }
 
     public int getStatus() {
-        if (distance > 200) {
+        if (distance > 1000) {
             return STATE_FALSE;
         }
         else {
@@ -72,7 +72,6 @@ public class GpsThread extends Thread implements LocationListener {
     public void onLocationChanged(Location location) {
         //여기서 위치값이 갱신되면 이벤트가 발생한다.
         //값은 Location 형태로 리턴되며 좌표 출력 방법은 다음과 같다.
-        Log.d("jaebal", "GpsThread");
         Log.d("siba", "onLocationChanged, location:" + location);
         double longitude = location.getLongitude(); //경도
         double latitude = location.getLatitude();   //위도
