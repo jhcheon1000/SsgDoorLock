@@ -23,6 +23,10 @@ public class GpsThread extends Thread implements LocationListener {
     private float distance;
 
     private Context permissionContext;
+    private Handler serviceHandler;
+
+    private static final int STATE_TRUE = 1;
+    private static final int STATE_FALSE = 2;
 
     public GpsThread(LocationManager locationService, Location homeArea, Context context) {
         mLocationManager = (LocationManager) locationService;
@@ -37,12 +41,12 @@ public class GpsThread extends Thread implements LocationListener {
         if (ActivityCompat.checkSelfPermission(permissionContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
                 ActivityCompat.checkSelfPermission(permissionContext, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, // 등록할 위치제공자
-                    100, // 통지사이의 최소 시간간격 (miliSecond)
-                    1, // 통지사이의 최소 변경거리 (m)
+                    3000, // 통지사이의 최소 시간간격 (miliSecond)
+                    0, // 통지사이의 최소 변경거리 (m)
                     this);
             mLocationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, // 등록할 위치제공자
-                    100, // 통지사이의 최소 시간간격 (miliSecond)
-                    1, // 통지사이의 최소 변경거리 (m)
+                    3000, // 통지사이의 최소 시간간격 (miliSecond)
+                    0, // 통지사이의 최소 변경거리 (m)
                     this);
         }
         Looper.loop();
@@ -55,15 +59,20 @@ public class GpsThread extends Thread implements LocationListener {
         mLocationManager.removeUpdates(this);
     }
 
-    public float getDistance() {
-        return distance;
+    public int getStatus() {
+        if (distance > 200) {
+            return STATE_FALSE;
+        }
+        else {
+            return STATE_TRUE;
+        }
     }
 
     @Override
     public void onLocationChanged(Location location) {
         //여기서 위치값이 갱신되면 이벤트가 발생한다.
         //값은 Location 형태로 리턴되며 좌표 출력 방법은 다음과 같다.
-
+        Log.d("jaebal", "GpsThread");
         Log.d("siba", "onLocationChanged, location:" + location);
         double longitude = location.getLongitude(); //경도
         double latitude = location.getLatitude();   //위도
@@ -75,6 +84,7 @@ public class GpsThread extends Thread implements LocationListener {
         temp.setLatitude(latitude);
         float distance = homeArea.distanceTo(temp);
         this.distance = distance;
+
         //Gps 위치제공자에 의한 위치변화. 오차범위가 좁다.
         //Network 위치제공자에 의한 위치변화
         //Network 위치는 Gps에 비해 정확도가 많이 떨어진다.

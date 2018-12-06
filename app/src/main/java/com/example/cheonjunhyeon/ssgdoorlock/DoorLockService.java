@@ -7,14 +7,18 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.hardware.SensorManager;
 import android.location.GnssStatus;
 import android.location.Location;
 import android.location.LocationManager;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.support.annotation.Nullable;
 import android.util.Log;
 import android.widget.Toast;
@@ -43,24 +47,16 @@ public class DoorLockService extends Service {
     private int isFront;
     private int isStopFront;
 
-    //for managing sesnor (accelerometer, magnetism)
-    private SensorManager mSensorManager = null;
-
     //for managing gps
     private Location locationHomeArea;
-    LocationManager mLocationManager = null;
-    GnssStatus.Callback mGnssStatusCallback;
-    private int satCnt;
-
-    //for capturing rssi
-    BroadcastReceiver mReceiver = null;
-
 
     private static final int STATE_TRUE = 1;
     private static final int STATE_FALSE = 2;
+
+
+
+    private LogicTask SsgLogicTask;
     //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
 
     // Member fields
     private static final UUID uuidSPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
@@ -94,6 +90,8 @@ public class DoorLockService extends Service {
     public void onDestroy() {
         Log.d(TAG,"onDestroy()");
         super.onDestroy();
+        SsgLogicTask.cancel(true);
+        SsgLogicTask = null;
     }
 
     @Override
@@ -110,13 +108,13 @@ public class DoorLockService extends Service {
 
         //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         // by cheon
+
         double lat = Double.valueOf(pref.getString("homeLatitude", "-1"));
         double lon = Double.valueOf(pref.getString("homeLongitude", "-1"));
         locationHomeArea = new Location("homeArea");
         locationHomeArea.setLatitude(lat);
         locationHomeArea.setLongitude(lon);
 
-        satCnt = -1;
         isHomeArea = STATE_NONE;
         isMovement = STATE_NONE;
         isIndoor = STATE_NONE;
@@ -127,6 +125,9 @@ public class DoorLockService extends Service {
 //        ForeGroundService.startForeground(this);
         Intent localIntent = new Intent(this, ForeGroundService.class);
         startService(localIntent);
+
+        SsgLogicTask = new LogicTask();
+        SsgLogicTask.execute();
     }
 
     @Override
@@ -199,6 +200,7 @@ public class DoorLockService extends Service {
             } catch (IOException e) {
                 Log.e(TAG, "create() failed", e);
             }
+
             mmSocket = tmp;
         }
 
@@ -208,7 +210,7 @@ public class DoorLockService extends Service {
 
             // 연결을 시도하기 전에는 항상 기기 검색을 중지한다.
             // 기기 검색이 계속되면 연결속도가 느려지기 때문이다.
-            mAdapter.cancelDiscovery();
+
 
             // BluetoothSocket 연결 시도
             try {
@@ -410,11 +412,44 @@ public class DoorLockService extends Service {
         editor.commit();
     }
 
-    private void registerReceiver() {
+    private class LogicTask extends AsyncTask<Void, Void, Boolean> {
+        private AccelerometerThread accThr;
+        private GeomagnetismThread magThr;
+        private GetRssiThread rssiThr;
+        private SatelliteCountThread satThr;
+        private GpsThread gpsThr;
 
+        private boolean isFirst;
+
+        public LogicTask() {
+            accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
+            magThr = new GeomagnetismThread((SensorManager) getSystemService(SENSOR_SERVICE));
+            rssiThr = new GetRssiThread(mAdapter, DoorLockService.this);
+            satThr = new SatelliteCountThread((LocationManager) getSystemService(LOCATION_SERVICE), DoorLockService.this);
+            gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), locationHomeArea, DoorLockService.this);
+
+            isFirst = false;
+        }
+
+        @Override
+        protected Boolean doInBackground(Void... voids) {
+            if (!isFirst) {
+                isFirst = true;
+                accThr.start();
+                magThr.start();
+                rssiThr.start();
+                satThr.start();
+                gpsThr.start();
+            }
+
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Boolean aBoolean) {
+            super.onPostExecute(aBoolean);
+        }
     }
 
-    private void unregisterReceiver() {
 
-    }
 }

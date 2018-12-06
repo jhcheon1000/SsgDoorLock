@@ -37,6 +37,7 @@ public class SatelliteCountThread extends Thread implements LocationListener {
                         if (satCnt == status.getSatelliteCount()) {
 
                         } else {
+                            Log.d("jaebal", "SateliteCountThread");
                             Log.d("siba", "위성 개수 : " + String.valueOf(status.getSatelliteCount()));
                             Toast.makeText(permissionContext, "위성 개수 : " + String.valueOf(status.getSatelliteCount()), Toast.LENGTH_SHORT).show();
                             satCnt = status.getSatelliteCount();
@@ -60,6 +61,7 @@ public class SatelliteCountThread extends Thread implements LocationListener {
                         this);
             }
         }
+        Log.d("siba", "siba");
         Looper.loop();
     }
 

@@ -70,6 +70,7 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
     GeomagnetismThread magThr;
     GpsThread gpsThr;
     SatelliteCountThread satThr;
+    GetRssiThread rssiThr;
 
     private final String[] permissions = {
             Manifest.permission.BLUETOOTH,
@@ -162,7 +163,7 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
 
 //        ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        registerReceiver(receiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
+//        registerReceiver(receiver, new IntentFilter(BluetoothDevice.ACTION_FOUND));
 
         if (!mBluetoothAdapter.isEnabled()) {
             mBluetoothAdapter.enable(); //강제 활성화
@@ -182,20 +183,28 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
             @Override
             public void onClick(View view) {
                 if (thrTest.isChecked()) {
-//                    accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
-//                    accThr.start();
-//                    gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), location208, SensorTest.this);
-//                    gpsThr.start();
+                    accThr = new AccelerometerThread((SensorManager) getSystemService(SENSOR_SERVICE));
+                    accThr.start();
+                    gpsThr = new GpsThread((LocationManager) getSystemService(LOCATION_SERVICE), location208, SensorTest.this);
+                    gpsThr.start();
                     satThr = new SatelliteCountThread((LocationManager) getSystemService(LOCATION_SERVICE), SensorTest.this);
                     satThr.start();
+                    rssiThr = new GetRssiThread(mBluetoothAdapter, SensorTest.this);
+                    rssiThr.start();
+                    magThr = new GeomagnetismThread((SensorManager) getSystemService(SENSOR_SERVICE));
+                    magThr.start();
                 }
                 else {
-//                    accThr.finish();
-//                    accThr = null;
-//                    gpsThr.finish();
-//                    gpsThr = null;
+                    accThr.finish();
+                    accThr = null;
+                    gpsThr.finish();
+                    gpsThr = null;
                     satThr.finish();
                     satThr = null;
+                    rssiThr.finish();
+                    rssiThr = null;
+                    magThr.finish();
+                    magThr = null;
                 }
             }
         });
@@ -209,9 +218,9 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
     protected void onResume() {
         super.onResume();
 
-        mSensorManager.registerListener(this,
-                mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD),
-                SensorManager.SENSOR_DELAY_UI);
+//        mSensorManager.registerListener(this,
+//                mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD),
+//                SensorManager.SENSOR_DELAY_UI);
 
 //        mSensorManager.registerListener(this,
 //                mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION),
@@ -410,7 +419,7 @@ public class SensorTest extends AppCompatActivity implements SensorEventListener
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        unregisterReceiver(receiver);
+//        unregisterReceiver(receiver);
 //        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
 //            lm.unregisterGnssStatusCallback(mGnssStatusCallback);
 //        }
