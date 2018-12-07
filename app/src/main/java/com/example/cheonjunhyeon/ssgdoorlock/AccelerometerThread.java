@@ -97,7 +97,7 @@ public class AccelerometerThread extends Thread implements SensorEventListener {
 
                 double accVal = Math.sqrt(filteredX*filteredX + filteredY*filteredY + filteredZ*filteredZ);
 
-                if (accVal > 0.9) moveCnt++;
+                if (accVal > 1.0) moveCnt++;
                 else stopCnt++;
                 accCnt++;
             }

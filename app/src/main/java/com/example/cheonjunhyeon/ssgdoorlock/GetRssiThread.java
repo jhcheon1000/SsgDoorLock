@@ -21,6 +21,7 @@ public class GetRssiThread extends Thread {
 
     private int rssi;
     private boolean isUpdate;
+    public boolean isStop;
 
     private static final int STATE_TRUE = 1;
     private static final int STATE_FALSE = 2;
@@ -32,6 +33,11 @@ public class GetRssiThread extends Thread {
 
         rssi = -100;
         isUpdate = false;
+        isStop = false;
+    }
+
+    public void thrStartDiscovery() {
+        mAdapter.startDiscovery();
     }
 
     private void registerReceiver() {
@@ -64,7 +70,10 @@ public class GetRssiThread extends Thread {
                             e.printStackTrace();
                     }
 //                    Log.d("logic", "startDiscovery");
-                    mAdapter.startDiscovery();
+                    if(!isStop) {
+                        mAdapter.startDiscovery();
+                    }
+
                     return;
                 }
                 else if(BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
@@ -117,6 +126,7 @@ public class GetRssiThread extends Thread {
             Looper.prepare();
         }
         rssiHandler = new Handler();
+
         registerReceiver();
         mAdapter.startDiscovery();
         Looper.loop();
@@ -133,7 +143,7 @@ public class GetRssiThread extends Thread {
     }
 
     public int getStatus() {
-        if (rssi > -70) return STATE_TRUE;
+        if (rssi > -75) return STATE_TRUE;
         else return STATE_FALSE;
     }
 

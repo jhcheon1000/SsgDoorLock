@@ -68,6 +68,10 @@ public class GpsThread extends Thread implements LocationListener {
         }
     }
 
+    public float getDistance() {
+        return distance;
+    }
+
     @Override
     public void onLocationChanged(Location location) {
         //여기서 위치값이 갱신되면 이벤트가 발생한다.

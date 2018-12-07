@@ -48,6 +48,9 @@
                 <!--<category android:name="android.intent.category.LAUNCHER" />-->
             <!--</intent-filter>-->
         </activity>
+        <activity android:name=".initActivity"
+            android:noHistory="true">
+        </activity>
 
         <service android:name=".DoorLockService" />
         <service android:exported="false" android:name=".ForeGroundService" android:process=":locker" />

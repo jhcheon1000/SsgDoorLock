@@ -6,6 +6,8 @@ import android.content.SharedPreferences;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 
@@ -56,6 +58,28 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
     }
 
     @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_connect:
+                return true;
+            case R.id.action_change_passwd:
+                Intent intent = new Intent(MainActivity.this, SetPasswdActivity.class);
+                startActivity(intent);
+                return true;
+            case R.id.action_resetting:
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         Log.d(TAG, "onDestroy()");
 
@@ -64,6 +88,7 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Intent intent = null;
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_CANCELED)
             finish();
@@ -73,13 +98,16 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
 
         if (requestCode == 101) {
             bdevice = data.getParcelableExtra("bdevice");
-//            Log.d("TEST", bdevice.getName());
+            Log.d("TEST", bdevice.getName());
 
-            Intent intent = new Intent(MainActivity.this, DoorLockService.class); //다음넘어갈 컴포넌트 정의
+            intent = new Intent(MainActivity.this, DoorLockService.class); //다음넘어갈 컴포넌트 정의
             intent.putExtra("methods", DoorLockService.METHODS_INIT);
             intent.putExtra("bdevice", bdevice);
 
             startService(intent);
+
+            Intent int1 = new Intent(MainActivity.this, initActivity.class);
+            startActivity(int1);
         }
     }
 
@@ -100,18 +128,27 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
     }
 
     private void reset() {
+//        SharedPreferences.Editor editor = pref.edit();
+//        editor.remove("isInit");
+//        editor.remove("isInitPasswd");
+//        editor.remove("Address");
+//        editor.commit();
+        Intent intent = new Intent(MainActivity.this, DoorLockService.class); //다음넘어갈 컴포넌트 정의
+        intent.putExtra("methods", 100);
+
+        startService(intent);
+    }
+
+    private void dlServiceClose() {
+//        Intent intent = new Intent(MainActivity.this, DoorLockService.class); //다음넘어갈 컴포넌트 정의
+//        intent.putExtra("methods", DoorLockService.METHODS_CLOSE);
+//
+//        startService(intent);
         SharedPreferences.Editor editor = pref.edit();
         editor.remove("isInit");
         editor.remove("isInitPasswd");
         editor.remove("Address");
         editor.commit();
-    }
-
-    private void dlServiceClose() {
-        Intent intent = new Intent(MainActivity.this, DoorLockService.class); //다음넘어갈 컴포넌트 정의
-        intent.putExtra("methods", DoorLockService.METHODS_CLOSE);
-
-        startService(intent);
     }
 
     private void dlServiceOpen() {

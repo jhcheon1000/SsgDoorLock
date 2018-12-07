@@ -79,6 +79,7 @@ public class DoorLockService extends Service {
     private ConnectThread mConnectThread;
     private ConnectedThread mConnectedThread;
     private int mState;
+    private int cb;
 
     private static final int STATE_NONE = 0;        // we're doing nothing
     private static final int STATE_LISTEN = 1;      // now listening for incoming connections
@@ -90,9 +91,6 @@ public class DoorLockService extends Service {
     public static final int METHODS_INIT = 0;
     public static final int METHODS_OPEN = 2;
     public static final int METHODS_CLOSE = 3;
-
-    private Context tc;
-
 
     @Nullable
     @Override
@@ -112,7 +110,7 @@ public class DoorLockService extends Service {
     public void onCreate() {
         Log.d(TAG,"onCreate()");
         super.onCreate();
-        tc = DoorLockService.this;
+
         handler = new Handler();
         pref = getSharedPreferences("pref", MODE_PRIVATE);
         mAdapter = BluetoothAdapter.getDefaultAdapter();
@@ -157,27 +155,30 @@ public class DoorLockService extends Service {
         switch (methods) {
             case METHODS_RELOAD:
                 Log.d(TAG, "METHODS_RELOAD");
-                String Address = pref.getString("Address", null);
 
-                if (isInit && mState != STATE_CONNECTED && Address != null) {
-                    Toast.makeText(this, "reload", Toast.LENGTH_SHORT).show();
-                    bdevice = mAdapter.getRemoteDevice(Address);
-                    //connect(bdevice);
+
+//                if (isInit && mState != STATE_CONNECTED && Address != null) {
+//                    Toast.makeText(this, "reload", Toast.LENGTH_SHORT).show();
+
+//                    connect(bdevice);
+//                }
+                start();
+                if(ssgHandler == null) {
+                    startHandlerThread();
+                    ssgHandler.sendEmptyMessage(1);
+                }
+                else {
+                    ssgHandler.sendEmptyMessage(1);
                 }
                 break;
             case METHODS_INIT:
                 Log.d(TAG, "METHODS_INIT");
+                this.cb = DoorLockProtocol.STATE_GET_AES;
 
+                start();
                 bdevice = intent.getParcelableExtra("bdevice");
-                ssgHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        ssgHandler.sendEmptyMessage(1);
-                    }
-                });
-                //start();
-                bdevice = intent.getParcelableExtra("bdevice");
-                //connect(bdevice);
+                connect(bdevice);
+                handle_init();
                 break;
 
             case METHODS_OPEN:
@@ -192,14 +193,35 @@ public class DoorLockService extends Service {
                 if (mConnectedThread != null)
                     mConnectedThread.write("0");
                 break;
+            case 4:
+                start();
+                ssgHandler.sendEmptyMessage(1);
+                break;
         }
 
         return super.onStartCommand(intent, flags, startId);
     }
 
+    private void handle_init() {
+        if(!isPostDelay){
+            isPostDelay = TRUE;
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    isPostDelay = FALSE;
+                    try {
+                        mConnectedThread.protocol.reqGetAES();
+                    } catch (Exception e) {
+                        handle_init();
+                    }
+                }
+            }, 5000 );
+        }
+    }
+
     public synchronized void start() {
         Log.d(TAG, "start");
-
+        isConnected = false;
         // Cancel any thread attempting to make a connection
         if (mConnectThread != null) {
             mConnectThread.cancel();
@@ -211,7 +233,57 @@ public class DoorLockService extends Service {
             mConnectedThread.cancel();
             mConnectedThread = null;
         }
+
+        setState(1);
     }
+
+    public synchronized void connect(BluetoothDevice device) {
+        Log.d(TAG, "connect to: " + device);
+
+        if(!mAdapter.isEnabled()){
+            mAdapter.enable(); //강제 활성화
+        }
+
+        // Cancel any thread attempting to make a connection
+        if (mState == STATE_CONNECTING)
+        {
+            if (mConnectThread != null) {
+                mConnectThread.cancel();
+                mConnectThread = null;
+            }
+        }
+
+        // Cancel any thread currently running a connection
+        if (mConnectedThread != null) {
+            mConnectedThread.cancel();
+            mConnectedThread = null;
+        }
+
+        // Start the thread to connect with the given device
+        mConnectThread = new ConnectThread(device);
+        mConnectThread.start();
+        setState(STATE_CONNECTING);
+    }
+    private void connectionFailed() {
+        setState(STATE_LISTEN);
+
+//        if(!isPostDelay){
+//            isPostDelay = TRUE;
+//            handler.postDelayed(new Runnable() {
+//                @Override
+//                public void run() {
+//                    isPostDelay = FALSE;
+//                    String Address = pref.getString("Address",null);
+//
+//                    if (Address != null) {
+//                        BluetoothDevice bdevice = mAdapter.getRemoteDevice(Address);
+//                        connect(bdevice);
+//                    }
+//                }
+//            }, 3000 );
+//        }
+    }
+
     private class ConnectThread extends Thread {
         private final BluetoothSocket mmSocket;
         private final BluetoothDevice mmDevice;
@@ -235,6 +307,7 @@ public class DoorLockService extends Service {
             // 연결을 시도하기 전에는 항상 기기 검색을 중지한다.
             // 기기 검색이 계속되면 연결속도가 느려지기 때문이다.
 
+//            mAdapter.cancelDiscovery();
 
             // BluetoothSocket 연결 시도
             try {
@@ -271,116 +344,7 @@ public class DoorLockService extends Service {
             }
         }
     }
-    public synchronized void connect(BluetoothDevice device) {
-        Log.d(TAG, "connect to: " + device);
 
-        if(!mAdapter.isEnabled()){
-            mAdapter.enable(); //강제 활성화
-        }
-
-        // Cancel any thread attempting to make a connection
-        if (mState == STATE_CONNECTING)
-        {
-            if (mConnectThread != null) {
-                mConnectThread.cancel();
-                mConnectThread = null;
-            }
-        }
-
-        // Cancel any thread currently running a connection
-        if (mConnectedThread != null) {
-            mConnectedThread.cancel();
-            mConnectedThread = null;
-        }
-
-        // Start the thread to connect with the given device
-        mConnectThread = new ConnectThread(device);
-        mConnectThread.start();
-        setState(STATE_CONNECTING);
-    }
-    private void connectionFailed() {
-        setState(STATE_LISTEN);
-
-        if(!isPostDelay){
-            isPostDelay = TRUE;
-            handler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    isPostDelay = FALSE;
-                    String Address = pref.getString("Address",null);
-
-                    if (Address != null) {
-                        BluetoothDevice bdevice = mAdapter.getRemoteDevice(Address);
-                        connect(bdevice);
-                    }
-                }
-            }, 3000 );
-        }
-    }
-
-    private class ConnectedThread extends Thread {
-        private final BluetoothSocket mmSocket;
-        private final InputStream mmInStream;
-        private final OutputStream mmOutStream;
-
-        public ConnectedThread(BluetoothSocket socket, BluetoothDevice device) {
-            Log.d(TAG, "create ConnectedThread");
-            mmSocket = socket;
-            InputStream tmpIn = null;
-            OutputStream tmpOut = null;
-
-            // BluetoothSocket의 inputstream 과 outputstream을 얻는다.
-            try {
-                tmpIn = socket.getInputStream();
-                tmpOut = socket.getOutputStream();
-            } catch (IOException e) {
-                Log.e(TAG, "temp sockets not created", e);
-            }
-
-            mmInStream = tmpIn;
-            mmOutStream = tmpOut;
-            isConnected = true;
-            DoorLockService.this.setInit(device);
-        }
-
-        public void run() {
-            Log.i(TAG, "BEGIN mConnectedThread");
-            byte[] buffer = new byte[1024];
-            int bytes;
-
-
-
-            // Keep listening to the InputStream while connected
-            while (true) {
-                try {
-                    // InputStream으로부터 값을 받는 읽는 부분(값을 받는다)
-                    bytes = mmInStream.read(buffer);
-                } catch (IOException e) {
-                    Log.e(TAG, "disconnected", e);
-                    connectionLost();
-                    break;
-                }
-            }
-        }
-
-        public void write(String msg) {
-            try {
-                // 값을 쓰는 부분(값을 보낸다)
-                mmOutStream.write(msg.getBytes());
-                mmOutStream.flush();
-            } catch (IOException e) {
-                Log.e(TAG, "Exception during write", e);
-            }
-        }
-
-        public void cancel() {
-            try {
-                mmSocket.close();
-            } catch (IOException e) {
-                Log.e(TAG, "close() of connect socket failed", e);
-            }
-        }
-    }
     public synchronized void connected(BluetoothSocket socket, BluetoothDevice device) {
         Log.d(TAG, "connected");
 
@@ -424,6 +388,79 @@ public class DoorLockService extends Service {
         }
     }
 
+    private class ConnectedThread extends Thread {
+        private final BluetoothSocket mmSocket;
+        private final InputStream mmInStream;
+        private final OutputStream mmOutStream;
+        public final DoorLockProtocol protocol;
+
+        public ConnectedThread(BluetoothSocket socket, BluetoothDevice device) {
+            Log.d(TAG, "create ConnectedThread");
+            mmSocket = socket;
+            InputStream tmpIn = null;
+            OutputStream tmpOut = null;
+
+            // BluetoothSocket의 inputstream 과 outputstream을 얻는다.
+            try {
+                tmpIn = socket.getInputStream();
+                tmpOut = socket.getOutputStream();
+            } catch (IOException e) {
+                Log.e(TAG, "temp sockets not created", e);
+            }
+
+            mmInStream = tmpIn;
+            mmOutStream = tmpOut;
+            isConnected = true;
+
+            protocol = new DoorLockProtocol(mmInStream, mmOutStream, pref);
+            DoorLockService.this.setInit(device);
+        }
+
+        public void run() {
+            Log.i(TAG, "BEGIN mConnectedThread");
+
+            try {
+                protocol.run();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+//            byte[] buffer = new byte[1024];
+//            int bytes;
+//
+//            // Keep listening to the InputStream while connected
+//            while (true) {
+//                try {
+//                    // InputStream으로부터 값을 받는 읽는 부분(값을 받는다)
+//                    bytes = mmInStream.read(buffer);
+//                } catch (IOException e) {
+//                    Log.e(TAG, "disconnected", e);
+//                    connectionLost();
+//                    break;
+//                }
+//            }
+        }
+
+        public void write(String msg) {
+            try {
+                // 값을 쓰는 부분(값을 보낸다)
+                mmOutStream.write(msg.getBytes());
+                mmOutStream.flush();
+            } catch (IOException e) {
+                Log.e(TAG, "Exception during write", e);
+                connectionLost();
+            }
+        }
+
+        public void cancel() {
+            try {
+                mmSocket.close();
+            } catch (IOException e) {
+                Log.e(TAG, "close() of connect socket failed", e);
+            }
+        }
+    }
+
+
     private synchronized void setState(int state) {
         Log.d(TAG, "setState() " + mState + " -> " + state);
         mState = state;
@@ -464,7 +501,7 @@ public class DoorLockService extends Service {
                 switch(msg.what) {
                     case 1:
                         Log.d("logic", "check gps");
-                        if (gpsThr.getStatus() == STATE_TRUE) {
+                        if (gpsThr.getStatus() == STATE_TRUE || gpsThr.getDistance() == (float) 10000) {
                             Log.d("logic", "home area");
 
                             try {
@@ -676,30 +713,64 @@ public class DoorLockService extends Service {
                         }
                         break;
                     case 8:
-                        if (isConnect) connect(bdevice);
-
-                        if(isConnected) {
-                            mConnectedThread.write("1");
+                        if (!isConnected) {
                             try {
-                                Thread.sleep(100);
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
+                                rssiThr.isStop = true;
+                                String Address = pref.getString("Address", null);
+                                bdevice = mAdapter.getRemoteDevice(Address);
+                                connect(bdevice);
+
+                                try {
+                                    Thread.sleep(4000);
+                                } catch (InterruptedException e1) {
+                                    e1.printStackTrace();
+                                }
+
+                                for (int i = 0; i < 7; i++) {
+                                    ssgHandler.removeMessages(i+1);
+                                }
+                                ssgHandler.sendEmptyMessage(8);
+
+                            } catch (Exception e) {
+                                try {
+                                    Thread.sleep(3000);
+                                } catch (InterruptedException e1) {
+                                    e1.printStackTrace();
+                                }
+                                for (int i = 0; i < 7; i++) {
+                                    ssgHandler.removeMessages(i+1);
+                                }
+                                ssgHandler.sendEmptyMessage(8);
+                                break;
                             }
-                            for (int i = 0; i < 7; i++) {
-                                ssgHandler.removeMessages(i+1);
-                            }
-                            sendMsg(7);
                         }
                         else {
                             try {
-                                Thread.sleep(100);
+                                mConnectedThread.protocol.reqOpenDoor();
+                            } catch (Exception e1) {
+                                try {
+                                    Thread.sleep(1000);
+                                } catch (InterruptedException e2) {
+                                    e1.printStackTrace();
+                                }
+                                for (int i = 0; i < 7; i++) {
+                                    ssgHandler.removeMessages(i+1);
+                                }
+                                ssgHandler.sendEmptyMessage(8);
+                                break;
+                            }
+                            try {
+                                Thread.sleep(2000);
                             } catch (InterruptedException e) {
                                 e.printStackTrace();
                             }
                             for (int i = 0; i < 7; i++) {
                                 ssgHandler.removeMessages(i+1);
                             }
-                            sendMsg(8);
+                            rssiThr.isStop = false;
+                            start();
+                            rssiThr.thrStartDiscovery();
+                            sendMsg(7);
                         }
                         break;
                     default:
