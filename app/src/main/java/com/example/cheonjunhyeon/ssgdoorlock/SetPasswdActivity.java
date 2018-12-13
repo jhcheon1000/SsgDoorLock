@@ -14,6 +14,7 @@ public class SetPasswdActivity extends Activity implements Button.OnClickListene
     private int idx;
     private String ipt;
     private String ipt_one_more;
+    private int methods;
 
     private Boolean chkHandler;
     private SharedPreferences pref;
@@ -22,6 +23,8 @@ public class SetPasswdActivity extends Activity implements Button.OnClickListene
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_passwd);
+        Intent intent = this.getIntent();
+        methods = intent.getIntExtra("methods", 0);
 
         initValue();
 
@@ -238,8 +241,19 @@ public class SetPasswdActivity extends Activity implements Button.OnClickListene
         editor.putString("passwd", ipt);
         editor.commit();
 
-        Intent intent = new Intent(SetPasswdActivity.this, SetLonLagActivity.class);
-        startActivity(intent);
-        finish();
+        if(methods == 0) {
+            Intent intent = new Intent(SetPasswdActivity.this, SetLonLagActivity.class);
+            startActivity(intent);
+            finish();
+        } else {
+            Intent intent = new Intent(SetPasswdActivity.this, DoorLockService.class); //다음넘어갈 컴포넌트 정의
+            intent.putExtra("methods", DoorLockService.METHODS_CHANGE_PASSWD);
+
+            startService(intent);
+
+            intent = new Intent(SetPasswdActivity.this, MainActivity.class);
+            startActivity(intent);
+            finish();
+        }
     }
 }

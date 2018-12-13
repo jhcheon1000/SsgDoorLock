@@ -12,6 +12,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,7 +27,7 @@ public class SetLonLagActivity extends AppCompatActivity {
 
     TextView tv;
     EditText addrInput;
-    Button btnSetAddr;
+    ImageButton btnSetAddr;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -40,7 +41,7 @@ public class SetLonLagActivity extends AppCompatActivity {
         tv = (TextView) findViewById(R.id.addr_exp);
         addrInput = (EditText) findViewById(R.id.addr_input);
 
-        btnSetAddr = (Button) findViewById(R.id.btn_addr);
+        btnSetAddr = (ImageButton) findViewById(R.id.btn_addr);
         btnSetAddr.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {

@@ -91,6 +91,8 @@ public class DoorLockService extends Service {
     public static final int METHODS_INIT = 0;
     public static final int METHODS_OPEN = 2;
     public static final int METHODS_CLOSE = 3;
+    public static final int METHODS_CHANGE_PASSWD = 5;
+
 
     @Nullable
     @Override
@@ -180,18 +182,14 @@ public class DoorLockService extends Service {
                 connect(bdevice);
                 handle_init();
                 break;
-
             case METHODS_OPEN:
                 Log.d(TAG, "METHODS_OPEN");
-
-                if (mConnectedThread != null)
-                    mConnectedThread.write("1");
+                handle_open();
                 break;
-            case METHODS_CLOSE:
-                Log.d(TAG, "METHODS_CLOSE");
+            case METHODS_CHANGE_PASSWD:
+                Log.d(TAG, "METHODS_CHANGE_PASSWD");
 
-                if (mConnectedThread != null)
-                    mConnectedThread.write("0");
+                handle_change_passwd();
                 break;
             case 4:
                 start();
@@ -211,6 +209,39 @@ public class DoorLockService extends Service {
                     isPostDelay = FALSE;
                     try {
                         mConnectedThread.protocol.reqGetAES();
+                    } catch (Exception e) {
+                        handle_init();
+                    }
+                }
+            }, 5000 );
+        }
+    }
+
+    private void handle_open() {
+        if(!isPostDelay){
+            isPostDelay = TRUE;
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    isPostDelay = FALSE;
+                    try {
+                        mConnectedThread.protocol.reqOpenDoor();
+                    } catch (Exception e) {
+                        handle_init();
+                    }
+                }
+            }, 5000 );
+        }
+    }
+    private void handle_change_passwd() {
+        if(!isPostDelay){
+            isPostDelay = TRUE;
+            handler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    isPostDelay = FALSE;
+                    try {
+                        mConnectedThread.protocol.reqResetPasswd();
                     } catch (Exception e) {
                         handle_init();
                     }

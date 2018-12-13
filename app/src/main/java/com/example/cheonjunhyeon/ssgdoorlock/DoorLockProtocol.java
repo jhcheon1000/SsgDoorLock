@@ -1,20 +1,13 @@
 package com.example.cheonjunhyeon.ssgdoorlock;
 
-import android.bluetooth.BluetoothDevice;
 import android.content.SharedPreferences;
-import android.os.Build;
-import android.os.Handler;
-import android.support.annotation.RequiresApi;
-import android.util.Base64;
 import android.util.Log;
-import android.widget.Toast;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
@@ -25,8 +18,6 @@ import java.util.Random;
 import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 
-import static java.lang.Boolean.FALSE;
-
 public class DoorLockProtocol {
 
     private final String TAG = "DoorLockProtocol";
@@ -34,16 +25,14 @@ public class DoorLockProtocol {
     private final InputStream mmInStream;
     private final OutputStream mmOutStream;
 
-    public static final int STATE_IDLE          = -1;
-    public static final int STATE_GET_AES       = 0;
-    public static final int STATE_INIT          = 1;
-    public static final int STATE_REQ_OPEN      = 2;
-    public static final int STATE_RES_OPEN      = 3;
-    public static final int STATE_NEW           = 10;
-//    private static final int STATE_CLOSE         = 3;
-//    private static final int STATE_GEUST         = 4;
-//    private static final int STATE_CHANGE_PASSWD = 5;
-//    private static final int STATE_RESET         = 6;
+    public static final int STATE_IDLE            = -1;
+    public static final int STATE_GET_AES         = 0;
+    public static final int STATE_INIT            = 1;
+    public static final int STATE_REQ_OPEN        = 2;
+    public static final int STATE_RES_OPEN        = 3;
+    public static final int STATE_REQ_RESETPASSWD = 4;
+    public static final int STATE_RES_RESETPASSWD = 5;
+    public static final int STATE_REQ_GET_CODE    = 6;
 
     private static final int SIZE_LEN = 1;
     private static final int SIZE_SEQ = 1;
@@ -56,26 +45,26 @@ public class DoorLockProtocol {
     private static final int SIZE_PASSCODE = 32;
 
 
-    public int state    = STATE_IDLE;
+    public int state;
+    private byte cur_seq ;
     private byte[] tx_buffer;
-    private byte cur_seq  = 0;
-
 
     DoorLockProtocol(InputStream in, OutputStream out, SharedPreferences pref) {
+        this.state = this.STATE_IDLE;
+        this.cur_seq = 0;
         this.mmInStream = in;
         this.mmOutStream = out;
         this.pref = pref;
     }
 
     private void write(byte[] msg) throws IOException {
-        System.out.print("write: ");
-        for(int i = 0; i < msg.length; i++) System.out.print((msg[i] & 0xff)+ " ");
-        System.out.println();
+//        System.out.print("write: ");
+//        for(int i = 0; i < msg.length; i++) System.out.print((msg[i] & 0xff)+ " ");
+//        System.out.println();
 
         mmOutStream.write(msg);
         mmOutStream.flush();
     }
-
 
     public void run(){
         byte[] ipt = new byte[1];
@@ -89,10 +78,10 @@ public class DoorLockProtocol {
                 size = mmInStream.read(buffer);
                 cur_len += size;
 
-                System.out.println("total: " + cur_len);
-                System.out.println("length: " + size);
-                for(int i = 0; i < size; i++) System.out.print((buffer[i] & 0xff)+ " ");
-                System.out.println();
+//                System.out.println("total: " + cur_len);
+//                System.out.println("length: " + size);
+//                for(int i = 0; i < size; i++) System.out.print((buffer[i] & 0xff)+ " ");
+//                System.out.println();
 
                 if (len == 0) {
                     len = buffer[0];
@@ -115,8 +104,6 @@ public class DoorLockProtocol {
                 } else {
                     len = 0;
                     cur_len = 0;
-
-                    write(tx_buffer);
                     continue;
                 }
             } catch (IOException e) {
@@ -144,7 +131,7 @@ public class DoorLockProtocol {
         }
     }
 
-    // AES: 공통 ________________________________________________________
+    // AES: 怨듯넻 _____________________________________________________________ DONE
     private void resAck(byte[] buffer) throws Exception {
         Log.d(TAG, "resACK");
         boolean valid = true;
@@ -157,9 +144,9 @@ public class DoorLockProtocol {
         }
 
 
-        System.out.print("dec: ");
-        for(int i = 0; i < dec.length; i++) System.out.print((dec[i] & 0xff)+ " ");
-        System.out.println();
+//        System.out.print("dec: ");
+//        for(int i = 0; i < dec.length; i++) System.out.print((dec[i] & 0xff)+ " ");
+//        System.out.println();
 
         // Chk cmd
         int state = buffer[1];
@@ -177,20 +164,21 @@ public class DoorLockProtocol {
             switch (state) {
                 case STATE_INIT:
                 case STATE_RES_OPEN:
-                    this.state  = STATE_IDLE;
+                case STATE_RES_RESETPASSWD:
+                case STATE_REQ_GET_CODE:
+                    resetState();
                     break;
             }
         }
 
         this.state  = STATE_IDLE;
     }
-
     private void resetState() {
         this.state = DoorLockProtocol.STATE_IDLE;
     }
-    // _________________________________________________________________
+    // _______________________________________________________________________
 
-    // 통신 연결 설정(AES 획득)  ____________________________________________ DONE
+    // RSA: ?듭떊 ?곌껐 ?ㅼ젙(AES ?띾뱷)  ____________________________________________ DONE
     public void reqGetAES() throws Exception {
         if (state != DoorLockProtocol.STATE_IDLE)
             throw new Exception("not STATE_IDLE");
@@ -288,10 +276,12 @@ public class DoorLockProtocol {
     }
     // _______________________________________________________________________
 
-    // AES: Init Doorlock ______________________________________________ DONE
+    // AES: Init Doorlock ____________________________________________________ DONE
     public void reqInitDoorLock() throws Exception {
-        if (state != DoorLockProtocol.STATE_IDLE)
+        if (state != DoorLockProtocol.STATE_IDLE) {
+            resetState();
             throw new Exception("not STATE_IDLE");
+        }
 
         state = DoorLockProtocol.STATE_INIT;
         int size = SIZE_SEQ + SIZE_PASSWD + SIZE_PASSCODE;
@@ -334,78 +324,13 @@ public class DoorLockProtocol {
     }
     // _______________________________________________________________________
 
-    // AES: RegisteAsUser ______________________________________________
-    public void reqRisteAsUser() throws Exception {
-        if (state != DoorLockProtocol.STATE_IDLE)
-            throw new Exception("not STATE_IDLE");
-
-        state = DoorLockProtocol.STATE_NEW;
-        int size = SIZE_LEN + SIZE_SEQ + SIZE_CMD + SIZE_PASSWD;
-
-        tx_buffer = new byte[size];
-        int idx = 0;
-
-        // Set Len
-        tx_buffer[idx++] = (byte) size;
-
-        // Set seq
-        Random generator = new Random();
-        this.cur_seq = (byte) generator.nextInt(253);
-        tx_buffer[idx++] = this.cur_seq;
-
-        // Set cmd
-        tx_buffer[idx++] = STATE_NEW;
-
-        // Set Passwd
-        String strPasswd = pref.getString("passwd", null);
-        for (int i = 0; i < SIZE_PASSWD; i++){
-            if (strPasswd == null) tx_buffer[idx++] = 0;
-            else tx_buffer[idx++] = (byte) (strPasswd.charAt(i) - '0');
-        }
-
-        tx_buffer = encrypt(tx_buffer);
-        write(tx_buffer);
-    }
-    private void resRisteAsUser(byte[] buffer) throws Exception {
-        boolean valid = true;
-        int size = SIZE_LEN + SIZE_SEQ + SIZE_CMD + SIZE_ACK + SIZE_PASSCODE;
-        int idx = 0;
-        buffer = decrypt(buffer);
-
-        // Chk len
-        int len = buffer[idx++];
-        if(len != size)             valid = false;
-
-        // Chk seq
-        int seq = buffer[idx++];
-        if(seq != this.cur_seq + 1) valid = false;
-        else this.cur_seq++;
-
-        // Chk state
-        int state = buffer[idx++];
-        if(state != this.state)     valid = false;
-
-        // Chk ACK
-        int ack = buffer[idx++];
-        if (ack == 0)               valid = false;
-
-        if (valid) {
-            byte[] passcode = new byte[SIZE_PASSCODE];
-            for (int i = 0; i < SIZE_PASSCODE; i++) {
-                passcode[i] = buffer[idx++];
-            }
-            SharedPreferences.Editor editor = pref.edit();
-            editor.putString("passcode", new String(passcode));
-            editor.commit();
-        }
-    }
-
-    // _________________________________________________________________
-
-    // Open ____________________________________________________________
+    // AES: Open ____________________________________________________________ DONE
     public void reqOpenDoor() throws Exception {
-//        if (state != DoorLockProtocol.STATE_IDLE)
-//            throw new Exception("not STATE_IDLE");
+        if (state != DoorLockProtocol.STATE_IDLE){
+            this.state = DoorLockProtocol.STATE_IDLE;
+            throw new Exception("not STATE_IDLE");
+        }
+
 
         int size = SIZE_SEQ;
         size = SIZE_LEN + SIZE_CMD + ((size % SIZE_AES == 0) ? SIZE_AES * (size / SIZE_AES) : size + (SIZE_AES - size % SIZE_AES));
@@ -424,7 +349,6 @@ public class DoorLockProtocol {
         Random generator = new Random();
         this.cur_seq = (byte) generator.nextInt(253);
         tx_buffer[idx++] = this.cur_seq;
-        System.out.println(this.cur_seq & 0xff);
 
         byte[] enc = encrypt(Arrays.copyOfRange(tx_buffer, 2, size));
         System.arraycopy(enc, 0, tx_buffer, 2, enc.length);
@@ -441,11 +365,6 @@ public class DoorLockProtocol {
         }
 
 
-        System.out.print("dec: ");
-        System.out.print( buffer[0] + " " + buffer[1] + " ");
-        for(int i = 0; i < dec.length; i++) System.out.print((dec[i] & 0xff)+ " ");
-        System.out.println();
-
         // Chk cmd
         int state = buffer[1];
         if(state != this.state)     valid = false;
@@ -455,7 +374,6 @@ public class DoorLockProtocol {
         byte seq = dec[idx++];
         if(seq != this.cur_seq + 1) valid = false;
         else this.cur_seq++;
-        System.out.println(this.cur_seq+" "+ (seq & 0xff)+ " "+valid);
 
         // Chk question
         int q1 = dec[idx++];
@@ -491,10 +409,134 @@ public class DoorLockProtocol {
             write(tx_buffer);
         }
     }
-    // _________________________________________________________________
+    // _______________________________________________________________________
+
+    // AES: get code _________________________________________________________ DONE
+    public void reqGetCode() throws Exception {
+        if (state != DoorLockProtocol.STATE_IDLE) {
+            resetState();
+            throw new Exception("not STATE_IDLE");
+        }
+
+        state = DoorLockProtocol.STATE_REQ_GET_CODE;
+        int size = SIZE_SEQ + SIZE_PASSWD;
+        size = SIZE_LEN + SIZE_CMD + ((size % SIZE_AES == 0) ? SIZE_AES * (size / SIZE_AES) : size + (SIZE_AES - size % SIZE_AES));
+
+        tx_buffer = new byte[size];
+        int idx = 0;
+
+        // Set Len
+        tx_buffer[idx++] = (byte) size;
+
+        // Set cmd
+        tx_buffer[idx++] = (byte) this.state;
+
+        // Set seq
+        Random generator = new Random();
+        this.cur_seq = (byte) generator.nextInt(253);
+        tx_buffer[idx++] = this.cur_seq;
+
+        // Set Passwd
+        String strPasswd = pref.getString("passwd", null);
+        for (int i = 0; i < SIZE_PASSWD; i++){
+            if (strPasswd == null) tx_buffer[idx++] = 0;
+            else tx_buffer[idx++] = (byte) (strPasswd.charAt(i) - '0');
+        }
+
+        byte[] enc = encrypt(Arrays.copyOfRange(tx_buffer, 2, size));
+        System.arraycopy(enc, 0, tx_buffer, 2, enc.length);
+        write(tx_buffer);
+    }
+    // _______________________________________________________________________
+
+    // AES: Reset passwd _____________________________________________________ DONE
+    public void reqResetPasswd() throws Exception {
+        if (state != DoorLockProtocol.STATE_IDLE) {
+            resetState();
+            throw new Exception("not STATE_IDLE");
+        }
+
+        int size = SIZE_SEQ;
+        size = SIZE_LEN + SIZE_CMD + ((size % SIZE_AES == 0) ? SIZE_AES * (size / SIZE_AES) : size + (SIZE_AES - size % SIZE_AES));
+        tx_buffer = new byte[size];
+
+        int idx = 0;
+
+        // Set Len
+        tx_buffer[idx++] = (byte) size;
+
+        // Set cmd
+        state = DoorLockProtocol.STATE_REQ_RESETPASSWD;
+        tx_buffer[idx++] = (byte) this.state;
+
+        // Set seq
+        Random generator = new Random();
+        this.cur_seq = (byte) generator.nextInt(253);
+        tx_buffer[idx++] = this.cur_seq;
 
 
-    // 암호화 복호화 함수 __________________________________________________
+        byte[] enc = encrypt(Arrays.copyOfRange(tx_buffer, 2, size));
+        System.arraycopy(enc, 0, tx_buffer, 2, enc.length);
+        write(tx_buffer);
+    }
+    private void resResetPasswd(byte[] buffer) throws Exception {
+        boolean valid = true;
+        int idx = 0;
+        byte[] dec = null;
+        try {
+            dec = decrypt(Arrays.copyOfRange(buffer, 2, buffer.length));
+        } catch (Exception e) {
+            System.out.println(e.toString());
+        }
+
+        // Chk cmd
+        int state = buffer[1];
+        if(state != this.state)     valid = false;
+        System.out.println(valid);
+
+        // Chk seq
+        byte seq = dec[idx++];
+        if(seq != this.cur_seq + 1) valid = false;
+        else this.cur_seq++;
+
+        // Chk question
+        int q1 = dec[idx++];
+        int q2 = dec[idx++];
+        int q3 = dec[idx++];
+
+        if (valid) {
+            // Ok
+            int size = SIZE_SEQ + SIZE_RES_PASSSCODE;
+            size = SIZE_LEN + SIZE_CMD + ((size % SIZE_AES == 0) ? SIZE_AES * (size / SIZE_AES) : size + (SIZE_AES - size % SIZE_AES));
+            tx_buffer = new byte[size];
+            idx = 0;
+
+            // Set Len
+            tx_buffer[idx++] = (byte) size;
+
+            // Set cmd
+            this.state = DoorLockProtocol.STATE_RES_RESETPASSWD;
+            tx_buffer[idx++] = (byte) this.state;
+
+            // Set Seq
+            this.cur_seq = (byte) (seq + 1);
+            tx_buffer[idx++] = this.cur_seq;
+
+            // Set Answer
+            byte[] passcode = pref.getString("passcode", null).getBytes("ISO-8859-1");
+            tx_buffer[idx++] = passcode[q1];
+            tx_buffer[idx++] = passcode[q2];
+            tx_buffer[idx++] = passcode[q3];
+
+            byte[] enc = encrypt(Arrays.copyOfRange(tx_buffer, 2, size));
+            System.arraycopy(enc, 0, tx_buffer, 2, enc.length);
+            write(tx_buffer);
+        }
+    }
+    // _______________________________________________________________________
+
+
+    // ?뷀샇??蹂듯샇???⑥닔 _________________________________________________________ DONE
     private Key getAESKey() throws Exception {
         byte[] aes = pref.getString("AES", null).getBytes("ISO-8859-1");
 
@@ -528,9 +570,9 @@ public class DoorLockProtocol {
             encVal = chiper.doFinal(Data);
         }
 
-        System.out.print("pre: ");
-        for(int i = 0; i < tx_buffer.length; i++) System.out.print((tx_buffer[i] & 0xff)+ " ");
-        System.out.println();
+//        System.out.print("pre: ");
+//        for(int i = 0; i < tx_buffer.length; i++) System.out.print((tx_buffer[i] & 0xff)+ " ");
+//        System.out.println();
 
         return encVal;
     }
@@ -559,5 +601,5 @@ public class DoorLockProtocol {
 
         return decValue;
     }
-    // _________________________________________________________________
+    // _______________________________________________________________________
 }

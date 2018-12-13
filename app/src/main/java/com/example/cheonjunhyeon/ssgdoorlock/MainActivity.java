@@ -10,6 +10,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageButton;
 
 import static java.lang.Boolean.FALSE;
 
@@ -49,13 +50,20 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
     }
 
     private void setEventView() {
-        Button btn = (Button)findViewById(R.id.button);
-        btn.setOnClickListener(this);
-        btn = (Button)findViewById(R.id.button2);
-        btn.setOnClickListener(this);
-        btn = (Button)findViewById(R.id.button3);
+        ImageButton btn = (ImageButton)findViewById(R.id.btn_open_main);
         btn.setOnClickListener(this);
     }
+
+    @Override
+    public void onClick(View v) {
+        switch (v.getId())
+        {
+            case R.id.btn_open_main:
+                dlServiceOpen();
+                break;
+        }
+    }
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -66,13 +74,10 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
-            case R.id.action_connect:
-                return true;
             case R.id.action_change_passwd:
                 Intent intent = new Intent(MainActivity.this, SetPasswdActivity.class);
+                intent.putExtra("methods", DoorLockService.METHODS_CHANGE_PASSWD);
                 startActivity(intent);
-                return true;
-            case R.id.action_resetting:
                 return true;
             default:
                 return true;
@@ -111,21 +116,6 @@ public class MainActivity extends AppCompatActivity implements Button.OnClickLis
         }
     }
 
-    @Override
-    public void onClick(View v) {
-        switch (v.getId())
-        {
-            case R.id.button:
-                dlServiceOpen();
-                break;
-            case R.id.button2:
-                dlServiceClose();
-                break;
-            case R.id.button3:
-                reset();
-                break;
-        }
-    }
 
     private void reset() {
 //        SharedPreferences.Editor editor = pref.edit();
